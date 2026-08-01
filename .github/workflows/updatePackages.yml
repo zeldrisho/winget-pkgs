@@ -1,0 +1,149 @@
+name: Update WinGet Packages
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Sync Fork
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-winget-packages
+  cancel-in-progress: false
+
+jobs:
+  generate-matrix:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            manifests/*/*/*/autoupdate.yaml
+            manifests/*/*/*/*/autoupdate.yaml
+            manifests/*/*/*/*/*/autoupdate.yaml
+
+      - name: Install yq (mikefarah/yq via Homebrew — apt's "yq" is a different, incompatible tool)
+        run: |
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install yq
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+
+      - id: set
+        run: |
+          set -euo pipefail
+
+          if [ -d manifests ]; then
+            matrix=$(find manifests -name autoupdate.yaml -print | sort | while read -r f; do
+              dir=$(dirname "$f")
+              # strip "manifests/<letter>/" prefix, join remaining path segments with "."
+              # handles multi-segment identifiers like NextDNS.NextDNS.CLI
+              rel=${dir#manifests/*/}
+              identifier=$(echo "$rel" | tr '/' '.')
+              IDENTIFIER="$identifier" yq -o=json '. + {"identifier": strenv(IDENTIFIER)}' "$f"
+            done | jq -s -c '.')
+          else
+            matrix=[]
+          fi
+
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  update:
+    needs: generate-matrix
+    if: needs.generate-matrix.outputs.matrix != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve latest version and URLs
+        id: ver
+        env:
+          CHECK_URL: ${{ matrix.package.checkUrl }}
+          IDENTIFIER: ${{ matrix.package.identifier }}
+          URL_TEMPLATES: ${{ toJson(matrix.package.urlTemplates) }}
+          VERSION_REGEX: ${{ matrix.package.versionRegex }}
+          GH_TOKEN: ${{ secrets.KOMAC_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari'
+          headers=$(mktemp)
+          effective_url=$(curl -fsSLI -A "$user_agent" -o "$headers" -w '%{url_effective}' "$CHECK_URL")
+          # versionRegex MUST use \K (or be one big group with nothing outside it) —
+          # grep -oP prints the whole match, not just the capture group, otherwise.
+          # Check headers/resolved URL first to support redirects without downloading installers.
+          version=$( (cat "$headers"; printf '\n%s\n' "$effective_url") | grep -oP "$VERSION_REGEX" | head -1 || true)
+
+          if [ -z "$version" ]; then
+            body=$(mktemp)
+            curl -fsSL -A "$user_agent" -o "$body" "$CHECK_URL"
+            version=$( (cat "$body"; printf '\n%s\n' "$effective_url") | grep -oP "$VERSION_REGEX" | head -1 || true)
+          fi
+          if [ -z "$version" ]; then
+            echo "Could not resolve version for $IDENTIFIER" >&2
+            exit 1
+          fi
+
+          identifier_path=${IDENTIFIER//./\/}
+          first_letter=$(printf '%s' "$IDENTIFIER" | cut -c1 | tr '[:upper:]' '[:lower:]')
+          manifest_path="manifests/$first_letter/$identifier_path"
+          existing_versions=$(gh api "repos/microsoft/winget-pkgs/contents/$manifest_path" --jq '.[].name')
+          if grep -Fxq "$version" <<< "$existing_versions"; then
+            echo "$IDENTIFIER $version already exists; skipping"
+            echo "already_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # urlTemplates is a list, so multiple installers (x64/arm64/msi+exe) are supported
+          urls_json=$(jq -c --arg v "$version" 'map(gsub("\\{VERSION\\}"; $v))' <<< "$URL_TEMPLATES")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "urls_json=$urls_json" >> "$GITHUB_OUTPUT"
+
+      - name: Install Komac (Homebrew)
+        if: steps.ver.outputs.already_exists != 'true'
+        run: |
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install komac
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+
+      - name: Submit update
+        if: steps.ver.outputs.already_exists != 'true'
+        env:
+          IDENTIFIER: ${{ matrix.package.identifier }}
+          KOMAC_TOKEN: ${{ secrets.KOMAC_TOKEN }}
+          URLS_JSON: ${{ steps.ver.outputs.urls_json }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          readarray -t urls < <(jq -r '.[]' <<< "$URLS_JSON")
+
+          komac update "$IDENTIFIER" \
+            --version "$VERSION" \
+            --urls "${urls[@]}" \
+            --token "$KOMAC_TOKEN" \
+            --submit
+
+  cleanup:
+    name: Cleanup merged branches
+    needs: update
+    if: always() && !cancelled() && needs.update.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Komac (Homebrew)
+        run: |
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install komac
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+
+      - name: Cleanup merged branches
+        run: komac cleanup --only-merged --token "${{ secrets.KOMAC_TOKEN }}"

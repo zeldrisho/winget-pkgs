@@ -1,0 +1,6 @@
+checkUrl: https://zalo.me/download/zalo-pc
+# anchored to the ZaloSetup installer name so it doesn't match unrelated numbers elsewhere;
+# \K discards everything before it from the printed match
+versionRegex: 'ZaloSetup-\K\d+\.\d+\.\d+(?=\.exe)'
+urlTemplates:
+  - https://res-zaloapp-aka-jpt.zdn.vn/win/ZaloSetup-{VERSION}.exe

@@ -1,0 +1,7 @@
+checkUrl: https://github.com/nextdns/nextdns/releases/latest
+# GitHub redirects /releases/latest -> /releases/tag/vX.Y.Z; read the version from
+# the resolved URL instead of hitting the rate-limited api.github.com JSON endpoint
+versionRegex: '/releases/tag/v\K[\d.]+'
+urlTemplates:
+  - https://github.com/nextdns/nextdns/releases/download/v{VERSION}/nextdns_{VERSION}_windows_386.zip
+  - https://github.com/nextdns/nextdns/releases/download/v{VERSION}/nextdns_{VERSION}_windows_amd64.zip
