@@ -2,6 +2,7 @@
 set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repository_root=$(git -C "$script_dir" rev-parse --show-toplevel)
 
 find_pr_number() {
   local identifier=$1
@@ -44,9 +45,11 @@ amend_root_installer_properties() {
   identifier_path=${identifier//./\/}
   manifest_path="manifests/$(cut -c1 <<< "$identifier" | tr '[:upper:]' '[:lower:]')/$identifier_path/$version/$identifier.installer.yaml"
   worktree=$(mktemp -d)
-  rm -rf "$worktree"
-  gh repo clone "$head_owner/winget-pkgs" "$worktree" -- \
-    --branch "$head_ref" --filter=blob:none --no-checkout --single-branch
+  rmdir "$worktree"
+  git -C "$repository_root" fetch --no-tags --filter=blob:none origin \
+    "+refs/heads/$head_ref:refs/remotes/origin/$head_ref"
+  git -C "$repository_root" worktree add --no-checkout "$worktree" \
+    "refs/remotes/origin/$head_ref"
   printf '%s\n' '/*' '!/*/' "/$manifest_path" \
     | git -C "$worktree" sparse-checkout set --no-cone --stdin
   git -C "$worktree" checkout
@@ -59,9 +62,10 @@ amend_root_installer_properties() {
     git -C "$worktree" config user.email 41898282+github-actions[bot]@users.noreply.github.com
     git -C "$worktree" add "$manifest_path"
     git -C "$worktree" commit --amend --no-edit
+    gh auth setup-git
     git -C "$worktree" push --force-with-lease origin "HEAD:$head_ref"
   fi
-  rm -rf "$worktree"
+  git -C "$repository_root" worktree remove --force "$worktree"
 }
 
 while read -r update; do
