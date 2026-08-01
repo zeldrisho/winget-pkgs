@@ -5,6 +5,21 @@ user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 results=$(mktemp -d)
 trap 'rm -rf "$results"' EXIT
 
+download_file() {
+  local url=$1
+  local output=$2
+  local description=$3
+  local attempt
+  for attempt in {1..3}; do
+    if curl -fsSL -A "$user_agent" -o "$output" "$url"; then
+      return
+    fi
+    echo "Download attempt $attempt failed for $description" >&2
+    [[ $attempt -eq 3 ]] || sleep 2
+  done
+  return 1
+}
+
 resolve_package() {
   local package=$1
   local result=$2
@@ -30,11 +45,11 @@ resolve_package() {
   # grep prints the whole match, so versionRegex must use \K or match only the value.
   if [[ $version_source == msi ]]; then
     installer=$(mktemp)
-    curl -fsSL -A "$user_agent" -o "$installer" "$check_url"
+    download_file "$check_url" "$installer" "$identifier installer"
     match=$(msiinfo export "$installer" Property | grep -oP -- "$version_regex" | head -1 || true)
   elif [[ $version_source == exe ]]; then
     installer=$(mktemp)
-    curl -fsSL -A "$user_agent" -o "$installer" "$check_url"
+    download_file "$check_url" "$installer" "$identifier installer"
     match=$(strings -el "$installer" \
       | awk 'NR > 1 { print previous "\t" $0 } { previous = $0 }' \
       | grep -oP -- "$version_regex" | head -1 || true)
@@ -42,7 +57,7 @@ resolve_package() {
     match=$(grep -oP -- "$version_regex" "$source" | head -1 || true)
     if [[ -z $match ]] || jq -e 'length > 0' <<< "$url_template_values" >/dev/null; then
       body=$(mktemp)
-      curl -fsSL -A "$user_agent" -o "$body" "$check_url"
+      download_file "$check_url" "$body" "$identifier check URL"
       cat "$body" >> "$source"
       match=$(grep -oP -- "$version_regex" "$source" | head -1 || true)
     fi

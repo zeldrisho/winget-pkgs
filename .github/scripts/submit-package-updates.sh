@@ -71,11 +71,22 @@ while read -r update; do
   readarray -t urls < <(jq -r '.urls[]' <<< "$update")
   komac_log=$(mktemp)
 
-  komac update "$identifier" \
-    --version "$version" \
-    --urls "${urls[@]}" \
-    --token "$KOMAC_TOKEN" \
-    --submit 2>&1 | tee "$komac_log"
+  for attempt in {1..3}; do
+    set +e
+    komac update "$identifier" \
+      --version "$version" \
+      --urls "${urls[@]}" \
+      --token "$KOMAC_TOKEN" \
+      --submit 2>&1 | tee "$komac_log"
+    status=${PIPESTATUS[0]}
+    set -e
+    [[ $status -eq 0 ]] && break
+    if [[ $attempt -eq 3 ]] || ! grep -Fq 'Ref cannot be created.' "$komac_log"; then
+      exit "$status"
+    fi
+    echo "Komac could not create the branch; retrying ($attempt/3)" >&2
+    sleep 5
+  done
 
   if jq -e 'length > 0' <<< "$properties" >/dev/null; then
     amend_root_installer_properties "$identifier" "$version" "$properties" "$komac_log"
