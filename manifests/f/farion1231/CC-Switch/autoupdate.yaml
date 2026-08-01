@@ -1,0 +1,5 @@
+checkUrl: https://github.com/farion1231/cc-switch/releases/latest
+versionRegex: '/releases/tag/v\K[\d.]+'
+urlTemplates:
+  - https://github.com/farion1231/cc-switch/releases/download/v{VERSION}/CC-Switch-v{VERSION}-Windows.msi
+  - https://github.com/farion1231/cc-switch/releases/download/v{VERSION}/CC-Switch-v{VERSION}-Windows-arm64.msi

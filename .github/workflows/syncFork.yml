@@ -3,7 +3,7 @@ name: Sync Fork
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 2 * * *' # daily at 02:00 UTC; updatePackages runs after this completes
+    - cron: '20 */4 * * *' # every 4 hours; updatePackages runs after this completes
 
 permissions:
   contents: write
@@ -19,7 +19,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          token: ${{ secrets.KOMAC_TOKEN }}
 
       - name: Merge upstream while preserving fork automation
         env:

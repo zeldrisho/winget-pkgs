@@ -1,0 +1,5 @@
+checkUrl: https://community.teamviewer.com/English/categories/change-logs-en
+versionRegex: '\[Windows\] v\K[\d.]+'
+urlTemplates:
+  - https://download.teamviewer.com/download/TeamViewerQS.exe
+  - https://download.teamviewer.com/download/TeamViewerQS_x64.exe

@@ -1,0 +1,4 @@
+checkUrl: https://github.com/tuyenvm/OpenKey/releases/latest
+versionRegex: '/releases/tag/\K[\d.]+'
+urlTemplates:
+  - https://github.com/tuyenvm/OpenKey/releases/download/{VERSION}/OpenKey64-Windows-{VERSION}-RC.zip

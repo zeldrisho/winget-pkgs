@@ -1,0 +1,5 @@
+checkUrl: https://download.canhcutteam.com/Launcher/CanhCutTeam_Setup.msi
+versionSource: msi
+versionRegex: '^ProductVersion\t\K[\d.]+'
+urlTemplates:
+  - https://download.canhcutteam.com/Launcher/CanhCutTeam_Setup.msi

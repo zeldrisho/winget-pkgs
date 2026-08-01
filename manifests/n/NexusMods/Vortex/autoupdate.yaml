@@ -1,0 +1,4 @@
+checkUrl: https://github.com/Nexus-Mods/Vortex/releases/latest
+versionRegex: '/releases/tag/v\K[\d.]+'
+urlTemplates:
+  - https://github.com/Nexus-Mods/Vortex/releases/download/v{VERSION}/vortex-setup-{VERSION}.exe

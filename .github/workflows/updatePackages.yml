@@ -24,18 +24,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          filter: blob:none
+          persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             manifests/*/*/*/autoupdate.yaml
             manifests/*/*/*/*/autoupdate.yaml
             manifests/*/*/*/*/*/autoupdate.yaml
 
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+
       - name: Install yq (mikefarah/yq via Homebrew — apt's "yq" is a different, incompatible tool)
-        run: |
-          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          brew install yq
-          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+        run: brew install yq
 
       - id: set
         run: |
@@ -65,33 +65,57 @@ jobs:
         package: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Install MSI inspection tools
+        if: matrix.package.versionSource == 'msi'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes msitools
+
       - name: Resolve latest version and URLs
         id: ver
         env:
           CHECK_URL: ${{ matrix.package.checkUrl }}
           IDENTIFIER: ${{ matrix.package.identifier }}
+          URL_TEMPLATE_VALUES: ${{ toJson(matrix.package.urlTemplateValues) }}
           URL_TEMPLATES: ${{ toJson(matrix.package.urlTemplates) }}
           VERSION_REGEX: ${{ matrix.package.versionRegex }}
-          GH_TOKEN: ${{ secrets.KOMAC_TOKEN }}
+          VERSION_SOURCE: ${{ matrix.package.versionSource }}
+          VERSION_TEMPLATE: ${{ matrix.package.versionTemplate }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
           user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari'
           headers=$(mktemp)
-          effective_url=$(curl -fsSLI -A "$user_agent" -o "$headers" -w '%{url_effective}' "$CHECK_URL")
+          source=$(mktemp)
+          # Some JSON endpoints reject HEAD requests; the GET below remains authoritative.
+          effective_url=$(curl -sSLI -A "$user_agent" -o "$headers" -w '%{url_effective}' "$CHECK_URL")
+          (cat "$headers"; printf '\n%s\n' "$effective_url") > "$source"
           # versionRegex MUST use \K (or be one big group with nothing outside it) —
           # grep -oP prints the whole match, not just the capture group, otherwise.
-          # Check headers/resolved URL first to support redirects without downloading installers.
-          version=$( (cat "$headers"; printf '\n%s\n' "$effective_url") | grep -oP "$VERSION_REGEX" | head -1 || true)
+          if [ "$VERSION_SOURCE" = msi ]; then
+            installer=$(mktemp)
+            curl -fsSL -A "$user_agent" -o "$installer" "$CHECK_URL"
+            match=$(msiinfo export "$installer" Property | grep -oP "$VERSION_REGEX" | head -1 || true)
+          else
+            match=$(grep -oP "$VERSION_REGEX" "$source" | head -1 || true)
 
-          if [ -z "$version" ]; then
-            body=$(mktemp)
-            curl -fsSL -A "$user_agent" -o "$body" "$CHECK_URL"
-            version=$( (cat "$body"; printf '\n%s\n' "$effective_url") | grep -oP "$VERSION_REGEX" | head -1 || true)
+            if [ -z "$match" ] || jq -e 'type == "object" and length > 0' <<< "$URL_TEMPLATE_VALUES" > /dev/null; then
+              body=$(mktemp)
+              curl -fsSL -A "$user_agent" -o "$body" "$CHECK_URL"
+              cat "$body" >> "$source"
+              match=$(grep -oP "$VERSION_REGEX" "$source" | head -1 || true)
+            fi
           fi
-          if [ -z "$version" ]; then
+          if [ -z "$match" ]; then
             echo "Could not resolve version for $IDENTIFIER" >&2
             exit 1
+          fi
+
+          if [ -n "$VERSION_TEMPLATE" ]; then
+            version=${VERSION_TEMPLATE//\{MATCH\}/$match}
+          else
+            version=$match
           fi
 
           identifier_path=${IDENTIFIER//./\/}
@@ -106,16 +130,29 @@ jobs:
           fi
 
           # urlTemplates is a list, so multiple installers (x64/arm64/msi+exe) are supported
-          urls_json=$(jq -c --arg v "$version" 'map(gsub("\\{VERSION\\}"; $v))' <<< "$URL_TEMPLATES")
+          urls_json=$(jq -c --arg version "$version" --arg match "$match" \
+            'map(split("{VERSION}") | join($version) | split("{MATCH}") | join($match))' <<< "$URL_TEMPLATES")
+          while read -r entry; do
+            placeholder=$(base64 --decode <<< "$entry" | jq -r '.key')
+            regex=$(base64 --decode <<< "$entry" | jq -r '.value')
+            value=$(grep -oP "$regex" "$source" | head -1 || true)
+            if [ -z "$value" ]; then
+              echo "Could not resolve URL placeholder {$placeholder} for $IDENTIFIER" >&2
+              exit 1
+            fi
+            urls_json=$(jq -c --arg placeholder "{$placeholder}" --arg value "$value" \
+              'map(split($placeholder) | join($value))' <<< "$urls_json")
+          done < <(jq -r '(. // {}) | to_entries[] | @base64' <<< "${URL_TEMPLATE_VALUES:-null}")
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "urls_json=$urls_json" >> "$GITHUB_OUTPUT"
 
+      - name: Set up Homebrew
+        if: steps.ver.outputs.already_exists != 'true'
+        uses: Homebrew/actions/setup-homebrew@main
+
       - name: Install Komac (Homebrew)
         if: steps.ver.outputs.already_exists != 'true'
-        run: |
-          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          brew install komac
-          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+        run: brew install komac
 
       - name: Submit update
         if: steps.ver.outputs.already_exists != 'true'
@@ -139,11 +176,13 @@ jobs:
     if: always() && !cancelled() && needs.update.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+
       - name: Install Komac (Homebrew)
-        run: |
-          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          brew install komac
-          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+        run: brew install komac
 
       - name: Cleanup merged branches
-        run: komac cleanup --only-merged --token "${{ secrets.KOMAC_TOKEN }}"
+        env:
+          KOMAC_TOKEN: ${{ secrets.KOMAC_TOKEN }}
+        run: komac cleanup --only-merged --token "$KOMAC_TOKEN"

@@ -1,0 +1,4 @@
+checkUrl: https://evkeyvn.com
+versionRegex: '<span>v\K[\d.]+'
+urlTemplates:
+  - https://github.com/lamquangminh/EVKey/releases/download/Release/EVKey.zip
