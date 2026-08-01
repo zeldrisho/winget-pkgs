@@ -1,0 +1,7 @@
+checkUrl: https://github.com/liriliri/aya/releases/latest
+versionRegex: '/releases/tag/v\K[\d.]+'
+urlTemplates:
+  - https://github.com/liriliri/aya/releases/download/v{VERSION}/AYA-{VERSION}-win-x64.exe
+rootInstallerProperties:
+  - ProductCode
+  - AppsAndFeaturesEntries

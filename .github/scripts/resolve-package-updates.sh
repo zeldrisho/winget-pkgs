@@ -35,7 +35,9 @@ resolve_package() {
   elif [[ $version_source == exe ]]; then
     installer=$(mktemp)
     curl -fsSL -A "$user_agent" -o "$installer" "$check_url"
-    match=$(strings -el "$installer" | grep -oP -- "$version_regex" | head -1 || true)
+    match=$(strings -el "$installer" \
+      | awk 'NR > 1 { print previous "\t" $0 } { previous = $0 }' \
+      | grep -oP -- "$version_regex" | head -1 || true)
   else
     match=$(grep -oP -- "$version_regex" "$source" | head -1 || true)
     if [[ -z $match ]] || jq -e 'length > 0' <<< "$url_template_values" >/dev/null; then
