@@ -1,5 +1,0 @@
-checkUrl: https://valorant.secure.dyn.riotcdn.net/channels/public/x/installer/current/live.live.ap.exe
-versionSource: exe
-versionRegex: '^ProductVersion\t\K\d+(?:\.\d+){3}$'
-urlTemplates:
-  - https://valorant.secure.dyn.riotcdn.net/channels/public/x/installer/current/live.live.ap.exe

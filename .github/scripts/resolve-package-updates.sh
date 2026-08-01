@@ -47,12 +47,6 @@ resolve_package() {
     installer=$(mktemp)
     download_file "$check_url" "$installer" "$identifier installer"
     match=$(msiinfo export "$installer" Property | grep -oP -- "$version_regex" | head -1 || true)
-  elif [[ $version_source == exe ]]; then
-    installer=$(mktemp)
-    download_file "$check_url" "$installer" "$identifier installer"
-    match=$(strings -el "$installer" \
-      | awk 'NR > 1 { print previous "\t" $0 } { previous = $0 }' \
-      | grep -oP -- "$version_regex" | head -1 || true)
   else
     match=$(grep -oP -- "$version_regex" "$source" | head -1 || true)
     if [[ -z $match ]] || jq -e 'length > 0' <<< "$url_template_values" >/dev/null; then
