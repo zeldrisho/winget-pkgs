@@ -1,0 +1,5 @@
+checkUrl: https://lol.secure.dyn.riotcdn.net/channels/public/x/installer/current/live.vn2.exe
+versionSource: exe
+versionRegex: '\b\d{3}\.\d+\.\d+\.\d+\b'
+urlTemplates:
+  - https://lol.secure.dyn.riotcdn.net/channels/public/x/installer/current/live.vn2.exe

@@ -1,0 +1,36 @@
+checks:
+  # Upstream updates the x86/x64 and ARM64 builds independently, so each published
+  # WinGet version must be checked using the installers from its own architecture set.
+  - checkUrl: https://www.unikey.org/download.html
+    guards:
+      - name: latest release heading
+        sourceRegex: '<h3 id="unikey-\K\d+-rc\d+'
+        matchRegex: '^\d+RC\d+'
+      - name: x64 displayed build
+        sourceRegex: 'title="UniKey 64 bit"[^\n]*: Build \K\d+'
+        matchRegex: '-\K\d+$'
+    versionRegex: 'unikey\K\d+RC\d+-\d+(?=-win64\.zip)'
+    versionTemplate: '{MAJOR}.{MINOR}.{BUILD}'
+    versionTemplateValues:
+      MAJOR: '^\K\d(?=\d+RC)'
+      MINOR: '^\d\K\d+(?=RC)'
+      BUILD: '-\K\d+$'
+    urlTemplates:
+      - https://www.unikey.org/assets/release/unikey{MATCH}-win64.zip
+      - https://www.unikey.org/assets/release/unikey{MATCH}-win32.zip
+  - checkUrl: https://www.unikey.org/download.html
+    guards:
+      - name: latest release heading
+        sourceRegex: '<h3 id="unikey-\K\d+-rc\d+'
+        matchRegex: '^\d+RC\d+'
+      - name: ARM64 displayed build
+        sourceRegex: 'title="UniKey ARM64"[^\n]*: Build \K\d+'
+        matchRegex: '-\K\d+$'
+    versionRegex: 'unikey\K\d+RC\d+-\d+(?=-arm64\.zip)'
+    versionTemplate: '{MAJOR}.{MINOR}.{BUILD}'
+    versionTemplateValues:
+      MAJOR: '^\K\d(?=\d+RC)'
+      MINOR: '^\d\K\d+(?=RC)'
+      BUILD: '-\K\d+$'
+    urlTemplates:
+      - https://www.unikey.org/assets/release/unikey{MATCH}-arm64.zip

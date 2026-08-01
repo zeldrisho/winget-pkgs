@@ -27,6 +27,7 @@ jobs:
           persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |
+            .github/scripts/
             manifests/*/*/*/autoupdate.yaml
             manifests/*/*/*/*/autoupdate.yaml
             manifests/*/*/*/*/*/autoupdate.yaml
@@ -34,36 +35,11 @@ jobs:
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@2026.07.29.1
 
-      - name: Install yq (mikefarah/yq via Homebrew — apt's "yq" is a different, incompatible tool)
+      - name: Install yq (mikefarah/yq via Homebrew — apt's "yq" is incompatible)
         run: brew install yq
 
       - id: set
-        run: |
-          set -euo pipefail
-
-          if [ -d manifests ]; then
-            matrix=$(find manifests -name autoupdate.yaml -print | sort | while read -r f; do
-              dir=$(dirname "$f")
-              # strip "manifests/<letter>/" prefix, join remaining path segments with "."
-              # handles multi-segment identifiers like NextDNS.NextDNS.CLI
-              rel=${dir#manifests/*/}
-              identifier=$(echo "$rel" | tr '/' '.')
-              IDENTIFIER="$identifier" yq -o=json '. + {"identifier": strenv(IDENTIFIER)}' "$f"
-            # Share runner setup across three packages; their version checks still run concurrently.
-            done | jq -s -c '
-              [range(0; length; 3) as $start
-                | .[$start:$start + 3] as $packages
-                | {
-                    name: ($packages | map(.identifier) | join(", ")),
-                    needsMsi: ($packages | any(.[]; .versionSource == "msi")),
-                    packages: $packages
-                  }
-              ]')
-          else
-            matrix=[]
-          fi
-
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/generate-update-matrix.sh
 
   update:
     name: Update (${{ matrix.batch.name }})
@@ -75,6 +51,11 @@ jobs:
         batch: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
       - name: Install MSI inspection tools
         if: matrix.batch.needsMsi
         run: |
@@ -86,108 +67,7 @@ jobs:
         env:
           PACKAGES_JSON: ${{ toJson(matrix.batch.packages) }}
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-
-          user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari'
-          results=$(mktemp -d)
-
-          resolve_package() {
-            local package=$1
-            local result=$2
-            local check_url identifier url_template_values url_templates version_regex version_source version_template
-            check_url=$(jq -r '.checkUrl' <<< "$package")
-            identifier=$(jq -r '.identifier' <<< "$package")
-            url_template_values=$(jq -c '.urlTemplateValues // {}' <<< "$package")
-            url_templates=$(jq -c '.urlTemplates' <<< "$package")
-            version_regex=$(jq -r '.versionRegex' <<< "$package")
-            version_source=$(jq -r '.versionSource // ""' <<< "$package")
-            version_template=$(jq -r '.versionTemplate // ""' <<< "$package")
-
-            local headers source effective_url installer match body version
-            headers=$(mktemp)
-            source=$(mktemp)
-            # Some JSON endpoints reject HEAD requests; the GET below remains authoritative.
-            effective_url=$(curl -sSLI -A "$user_agent" -o "$headers" -w '%{url_effective}' "$check_url")
-            (cat "$headers"; printf '\n%s\n' "$effective_url") > "$source"
-            # versionRegex MUST use \K (or be one big group with nothing outside it) —
-            # grep -oP prints the whole match, not just the capture group, otherwise.
-            if [ "$version_source" = msi ]; then
-              installer=$(mktemp)
-              curl -fsSL -A "$user_agent" -o "$installer" "$check_url"
-              match=$(msiinfo export "$installer" Property | grep -oP "$version_regex" | head -1 || true)
-            else
-              match=$(grep -oP "$version_regex" "$source" | head -1 || true)
-
-              if [ -z "$match" ] || jq -e 'length > 0' <<< "$url_template_values" > /dev/null; then
-                body=$(mktemp)
-                curl -fsSL -A "$user_agent" -o "$body" "$check_url"
-                cat "$body" >> "$source"
-                match=$(grep -oP "$version_regex" "$source" | head -1 || true)
-              fi
-            fi
-            if [ -z "$match" ]; then
-              echo "Could not resolve version for $identifier" >&2
-              return 1
-            fi
-
-            if [ -n "$version_template" ]; then
-              version=${version_template//\{MATCH\}/$match}
-            else
-              version=$match
-            fi
-
-            local identifier_path first_letter manifest_path existing_versions
-            identifier_path=${identifier//./\/}
-            first_letter=$(printf '%s' "$identifier" | cut -c1 | tr '[:upper:]' '[:lower:]')
-            manifest_path="manifests/$first_letter/$identifier_path"
-            existing_versions=$(gh api "repos/microsoft/winget-pkgs/contents/$manifest_path" --jq '.[].name')
-            if grep -Fxq "$version" <<< "$existing_versions"; then
-              echo "$identifier $version already exists; skipping"
-              printf 'null\n' > "$result"
-              return
-            fi
-
-            # urlTemplates is a list, so multiple installers (x64/arm64/msi+exe) are supported.
-            local urls_json entry placeholder regex value
-            urls_json=$(jq -c --arg version "$version" --arg match "$match" \
-              'map(split("{VERSION}") | join($version) | split("{MATCH}") | join($match))' <<< "$url_templates")
-            while read -r entry; do
-              placeholder=$(base64 --decode <<< "$entry" | jq -r '.key')
-              regex=$(base64 --decode <<< "$entry" | jq -r '.value')
-              value=$(grep -oP "$regex" "$source" | head -1 || true)
-              if [ -z "$value" ]; then
-                echo "Could not resolve URL placeholder {$placeholder} for $identifier" >&2
-                return 1
-              fi
-              urls_json=$(jq -c --arg placeholder "{$placeholder}" --arg value "$value" \
-                'map(split($placeholder) | join($value))' <<< "$urls_json")
-            done < <(jq -r 'to_entries[] | @base64' <<< "$url_template_values")
-
-            jq -cn --arg identifier "$identifier" --arg version "$version" --argjson urls "$urls_json" \
-              '{identifier: $identifier, version: $version, urls: $urls}' > "$result"
-          }
-
-          pids=()
-          index=0
-          while read -r package; do
-            resolve_package "$package" "$results/$index.json" &
-            pids+=("$!")
-            index=$((index + 1))
-          done < <(jq -c '.[]' <<< "$PACKAGES_JSON")
-
-          failed=0
-          for pid in "${pids[@]}"; do
-            if ! wait "$pid"; then
-              failed=1
-            fi
-          done
-          if [ "$failed" -ne 0 ]; then
-            exit 1
-          fi
-
-          updates=$(jq -s -c 'map(select(. != null))' "$results"/*.json)
-          echo "updates=$updates" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/resolve-package-updates.sh
 
       - name: Set up Homebrew
         if: steps.updates.outputs.updates != '[]'
@@ -200,22 +80,11 @@ jobs:
       - name: Submit updates
         if: steps.updates.outputs.updates != '[]'
         env:
+          FORK_OWNER: ${{ github.repository_owner }}
+          GH_TOKEN: ${{ secrets.KOMAC_TOKEN }}
           KOMAC_TOKEN: ${{ secrets.KOMAC_TOKEN }}
           UPDATES_JSON: ${{ steps.updates.outputs.updates }}
-        run: |
-          set -euo pipefail
-
-          while read -r update; do
-            identifier=$(jq -r '.identifier' <<< "$update")
-            version=$(jq -r '.version' <<< "$update")
-            readarray -t urls < <(jq -r '.urls[]' <<< "$update")
-
-            komac update "$identifier" \
-              --version "$version" \
-              --urls "${urls[@]}" \
-              --token "$KOMAC_TOKEN" \
-              --submit
-          done < <(jq -c '.[]' <<< "$UPDATES_JSON")
+        run: .github/scripts/submit-package-updates.sh
 
   cleanup:
     name: Cleanup merged branches
