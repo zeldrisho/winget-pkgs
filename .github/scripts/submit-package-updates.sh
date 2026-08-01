@@ -58,8 +58,13 @@ amend_root_installer_properties() {
     "$worktree/$manifest_path" "$properties"
   git -C "$worktree" diff --check
   if ! git -C "$worktree" diff --quiet; then
-    git -C "$worktree" config user.name github-actions[bot]
-    git -C "$worktree" config user.email 41898282+github-actions[bot]@users.noreply.github.com
+    local committer_id committer_login committer_name
+    IFS=$'\t' read -r committer_id committer_login committer_name < <(
+      gh api user --jq '[.id, .login, (.name // .login)] | @tsv'
+    )
+    git -C "$worktree" config user.name "$committer_name"
+    git -C "$worktree" config user.email \
+      "$committer_id+$committer_login@users.noreply.github.com"
     git -C "$worktree" add "$manifest_path"
     git -C "$worktree" commit --amend --no-edit
     gh auth setup-git
