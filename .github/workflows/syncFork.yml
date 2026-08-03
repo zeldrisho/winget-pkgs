@@ -3,7 +3,7 @@ name: Sync Fork
 on:
   workflow_dispatch:
   schedule:
-    - cron: '20 */4 * * *' # every 4 hours; updatePackages runs after this completes
+    - cron: '0 2 * * *' # daily at 02:00 UTC; updatePackages runs after this completes
 
 permissions:
   contents: write
