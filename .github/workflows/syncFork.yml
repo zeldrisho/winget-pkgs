@@ -30,5 +30,26 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git remote add upstream https://github.com/microsoft/winget-pkgs.git
           git fetch upstream "$DEFAULT_BRANCH"
-          git merge --no-edit "upstream/$DEFAULT_BRANCH"
+          if ! git merge --no-edit "upstream/$DEFAULT_BRANCH"; then
+            if git diff --quiet --diff-filter=U; then
+              echo "::error::Upstream merge failed without producing conflicts"
+              exit 1
+            fi
+
+            # Keep files intentionally deleted by the fork. Upstream changes to
+            # those files otherwise produce recurring modify/delete conflicts.
+            while IFS= read -r -d '' path; do
+              if ! git cat-file -e "HEAD:$path" 2>/dev/null; then
+                git rm -- "$path"
+              fi
+            done < <(git diff --name-only --diff-filter=U -z)
+
+            if ! git diff --quiet --diff-filter=U; then
+              echo "::error::Upstream merge has conflicts requiring manual resolution"
+              git diff --name-only --diff-filter=U
+              exit 1
+            fi
+
+            git commit --no-edit
+          fi
           git push origin "HEAD:$DEFAULT_BRANCH"

@@ -2,7 +2,11 @@
 
 ## Scope
 - This is a shallow, sparse fork of the WinGet manifest repository.
+- Treat both the repository and its Git history as exceptionally large.
 - Do not expand it to a full clone or recursively scan `manifests/`.
+- Keep history queries path-scoped and explicitly bounded; never enumerate the full commit list.
+- Avoid local full-tree clones, worktrees, merges, and exhaustive validation; prefer targeted checks and CI.
+- Stop once targeted evidence identifies the issue; do not perform costly reproduction without approval.
 - Do not create version manifests unless explicitly asked; updates are submitted by Komac CI.
 
 ## Autoupdate Packages
