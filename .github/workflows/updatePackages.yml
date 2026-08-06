@@ -3,7 +3,7 @@ name: Update WinGet Packages
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 2 * * *' # daily at 02:00 UTC
+    - cron: '0 3 * * *' # daily at 03:00 UTC, after the manifests sync
 
 permissions:
   contents: read
