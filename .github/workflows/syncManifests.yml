@@ -1,4 +1,4 @@
-name: Sync Manifests
+name: Sync Autoupdate Manifests
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 1
           sparse-checkout: .github
 
-      - name: Sync upstream manifests
+      - name: Sync upstream manifests for autoupdate packages
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
@@ -32,9 +32,22 @@ jobs:
           git remote add upstream https://github.com/microsoft/winget-pkgs.git
           git fetch --depth=1 --filter=blob:none upstream "$DEFAULT_BRANCH"
 
+          # Sync only the manifest folders of packages that have an
+          # autoupdate.yaml in the fork. The autoupdate.yaml files themselves
+          # are fork-only (absent upstream) and must never be restored.
           changed_paths=$(mktemp)
+          mapfile -d '' pkg_dirs < <(
+            git ls-tree -r -z --name-only HEAD -- manifests \
+              | grep -z 'autoupdate.yaml$' \
+              | sed -z 's#/autoupdate.yaml$##'
+          )
+          if [[ ${#pkg_dirs[@]} -eq 0 ]]; then
+            echo "No autoupdate.yaml files found; nothing to sync"
+            exit 0
+          fi
+
           git diff --name-only -z HEAD "upstream/$DEFAULT_BRANCH" -- \
-            manifests ':(exclude,glob)manifests/**/autoupdate.yaml' > "$changed_paths"
+            "${pkg_dirs[@]}" ':(exclude,glob)manifests/**/autoupdate.yaml' > "$changed_paths"
 
           if [[ -s "$changed_paths" ]]; then
             git restore --source="upstream/$DEFAULT_BRANCH" --staged --worktree \
