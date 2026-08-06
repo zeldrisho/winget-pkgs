@@ -2,11 +2,8 @@ name: Update WinGet Packages
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Sync Fork
-    types:
-      - completed
+  schedule:
+    - cron: '0 2 * * *' # daily at 02:00 UTC
 
 permissions:
   contents: read
@@ -17,7 +14,7 @@ concurrency:
 
 jobs:
   generate-matrix:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set.outputs.matrix }}

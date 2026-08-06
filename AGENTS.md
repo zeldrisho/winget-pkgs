@@ -27,13 +27,12 @@
 - Use `rootInstallerProperties` when WinGet requires first-installer values to retain root-level inheritance.
 
 ## CI and Tools
-- `.github/workflows/syncFork.yml` syncs upstream; a successful run triggers `.github/workflows/updatePackages.yml`.
+- `.github/workflows/updatePackages.yml` runs on a daily schedule (02:00 UTC) and manual dispatch; there is no upstream sync workflow.
 - Keep updater logic in `.github/scripts/`; preserve identifier grouping, three-package batches, and concurrent checks.
 - CI uses `Homebrew/actions/setup-homebrew` and Brew-installed `komac` and mikefarah `yq`.
 - CI installs `msitools` with APT only for MSI version checks.
 - Locally use `actionlint` for workflows, `yq` for matrix generation, APT-installed `msitools` for MSI checks, and Komac `analyze`/`update --dry-run` for generated-manifest checks.
 - Pass `--token "$(gh auth token)"` to local Komac commands because headless Linux lacks Secret Service storage.
-- Fork sync uses the workflow's `GITHUB_TOKEN` with `contents: write`.
 - Komac submission and cleanup use `secrets.KOMAC_TOKEN`, a classic token with `public_repo` scope.
 - Fix generated Komac PRs by amending their existing commit and pushing with `--force-with-lease`; do not add follow-up commits.
 
