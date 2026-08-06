@@ -1,0 +1,47 @@
+name: Sync Manifests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 1 * *' # monthly at 02:00 UTC on the 1st
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-manifests
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github
+
+      - name: Sync upstream manifests
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git remote add upstream https://github.com/microsoft/winget-pkgs.git
+          git fetch --depth=1 --filter=blob:none upstream "$DEFAULT_BRANCH"
+
+          changed_paths=$(mktemp)
+          git diff --name-only -z HEAD "upstream/$DEFAULT_BRANCH" -- \
+            manifests ':(exclude,glob)manifests/**/autoupdate.yaml' > "$changed_paths"
+
+          if [[ -s "$changed_paths" ]]; then
+            git restore --source="upstream/$DEFAULT_BRANCH" --staged --worktree \
+              --ignore-skip-worktree-bits --pathspec-from-file="$changed_paths" \
+              --pathspec-file-nul
+            git commit -m "chore(sync): update upstream manifests"
+            git push origin "HEAD:$DEFAULT_BRANCH"
+          else
+            echo "Manifests are already synchronized"
+          fi

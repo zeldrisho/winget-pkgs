@@ -27,7 +27,7 @@
 - Use `rootInstallerProperties` when WinGet requires first-installer values to retain root-level inheritance.
 
 ## CI and Tools
-- `.github/workflows/updatePackages.yml` runs on a daily schedule (02:00 UTC) and manual dispatch; there is no upstream sync workflow.
+- `.github/workflows/syncManifests.yml` re-syncs upstream `manifests/` (excluding `autoupdate.yaml`) on a monthly schedule and manual dispatch; `.github/workflows/updatePackages.yml` runs daily at 02:00 UTC and on manual dispatch.
 - Keep updater logic in `.github/scripts/`; preserve identifier grouping, three-package batches, and concurrent checks.
 - CI uses `Homebrew/actions/setup-homebrew` and Brew-installed `komac` and mikefarah `yq`.
 - CI installs `msitools` with APT only for MSI version checks.
