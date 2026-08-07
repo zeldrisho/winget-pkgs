@@ -56,7 +56,12 @@ amend_root_installer_properties() {
 
   python3 "$script_dir/promote-root-installer-properties.py" \
     "$worktree/$manifest_path" "$properties"
-  git -C "$worktree" diff --check
+  # Komac commits manifests with CRLF line endings (GitHub API bypasses the
+  # .gitattributes normalization). The sparse worktree never materializes
+  # .gitattributes, so a plain `git diff --check` would flag every promoted
+  # line's CR as trailing whitespace. cr-at-eol treats CR as part of the line
+  # terminator while still catching genuine trailing whitespace.
+  git -C "$worktree" -c core.whitespace="blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol" diff --check
   if ! git -C "$worktree" diff --quiet; then
     local committer_id committer_login committer_name
     IFS=$'\t' read -r committer_id committer_login committer_name < <(
