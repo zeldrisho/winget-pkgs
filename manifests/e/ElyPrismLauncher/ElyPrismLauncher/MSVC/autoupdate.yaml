@@ -5,6 +5,3 @@ urlTemplates:
   - https://github.com/ElyPrismLauncher/Launcher/releases/download/{VERSION}/PineconeMC-Windows-MSVC-arm64-Portable-{VERSION}.zip
   - https://github.com/ElyPrismLauncher/Launcher/releases/download/{VERSION}/PineconeMC-Windows-MSVC-Setup-{VERSION}.exe
   - https://github.com/ElyPrismLauncher/Launcher/releases/download/{VERSION}/PineconeMC-Windows-MSVC-arm64-Setup-{VERSION}.exe
-rootInstallerProperties:
-  - ProductCode
-  - AppsAndFeaturesEntries
