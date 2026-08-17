@@ -1,7 +1,7 @@
 checkUrl: https://github.com/ElyPrismLauncher/Launcher/releases/latest
-versionRegex: '/releases/tag/\K[\d.]+'
+versionRegex: '/releases/tag/v?\K[\d.]+'
 urlTemplates:
-  - https://github.com/ElyPrismLauncher/Launcher/releases/download/v{VERSION}/PineconeMC-Windows-MSVC-Portable-{VERSION}.zip
+  - https://github.com/ElyPrismLauncher/Launcher/releases/download/{VERSION}/PineconeMC-Windows-MSVC-Portable-{VERSION}.zip
   - https://github.com/ElyPrismLauncher/Launcher/releases/download/{VERSION}/PineconeMC-Windows-MSVC-arm64-Portable-{VERSION}.zip
   - https://github.com/ElyPrismLauncher/Launcher/releases/download/{VERSION}/PineconeMC-Windows-MSVC-Setup-{VERSION}.exe
   - https://github.com/ElyPrismLauncher/Launcher/releases/download/{VERSION}/PineconeMC-Windows-MSVC-arm64-Setup-{VERSION}.exe
