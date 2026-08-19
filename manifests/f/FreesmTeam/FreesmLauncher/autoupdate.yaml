@@ -1,0 +1,5 @@
+checkUrl: https://github.com/FreesmTeam/FreesmLauncher/releases/latest
+versionRegex: '/releases/tag/v?\K[\d.]+'
+urlTemplates:
+  - https://github.com/FreesmTeam/FreesmLauncher/releases/download/{VERSION}/FreesmLauncher-Windows-MSVC-Setup-{VERSION}.exe
+  - https://github.com/FreesmTeam/FreesmLauncher/releases/download/{VERSION}/FreesmLauncher-Windows-MSVC-arm64-Setup-{VERSION}.exe

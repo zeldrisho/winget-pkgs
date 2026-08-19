@@ -1,0 +1,4 @@
+checkUrl: https://github.com/Pathoschild/SMAPI/releases/latest
+versionRegex: '/releases/tag/v?\K[\d.]+'
+urlTemplates:
+  - https://github.com/Pathoschild/SMAPI/releases/download/{VERSION}/SMAPI-{VERSION}-installer.zip
