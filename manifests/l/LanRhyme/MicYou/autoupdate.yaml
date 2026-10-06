@@ -1,0 +1,4 @@
+checkUrl: https://github.com/LanRhyme/MicYou/releases/latest
+versionRegex: '/releases/tag/v?\K[\d.]+'
+urlTemplates:
+  - https://github.com/LanRhyme/MicYou/releases/download/v{VERSION}/MicYou-Win-{VERSION}-installer.exe
