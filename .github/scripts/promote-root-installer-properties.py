@@ -56,8 +56,10 @@ def main() -> None:
         del lines[start:end]
 
     if root_blocks:
+        # ReleaseDate is optional; root properties then go right before Installers.
         insert_at = next(
-            i for i, line in enumerate(lines) if line.startswith("ReleaseDate:")
+            (i for i, line in enumerate(lines) if line.startswith("ReleaseDate:")),
+            lines.index("Installers:"),
         )
         lines[insert_at:insert_at] = root_blocks
         path.write_bytes(newline.join(line.encode() for line in lines) + newline)

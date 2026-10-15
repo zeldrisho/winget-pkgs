@@ -125,29 +125,42 @@ resolve_package() {
 }
 
 pids=()
+ids=()
 index=0
 while read -r package; do
+  ids+=("$(jq -r '.identifier' <<< "$package")")
   resolve_package "$package" "$results/$index.json" &
   pids+=("$!")
   index=$((index + 1))
 done < <(jq -c '.[]' <<< "$PACKAGES_JSON")
 
+# A failed check must not block the other packages in the batch: report it,
+# keep the successful results, and let the workflow fail afterwards (`failed`).
 failed=0
-for pid in "${pids[@]}"; do
-  if ! wait "$pid"; then
+for i in "${!pids[@]}"; do
+  if ! wait "${pids[$i]}"; then
+    echo "::error title=Update check failed::${ids[$i]}" >&2
+    rm -f "$results/$i.json"
     failed=1
   fi
 done
-[[ $failed -eq 0 ]] || exit 1
 
-updates=$(jq -s -c '
-  map(select(. != null))
-  | group_by([.identifier, .version])
-  | map({
-      identifier: .[0].identifier,
-      version: .[0].version,
-      urls: (map(.urls[]) | unique),
-      rootInstallerProperties: (map(.rootInstallerProperties[]) | unique)
-    })
-' "$results"/*.json)
-echo "updates=$updates" >> "$GITHUB_OUTPUT"
+shopt -s nullglob
+files=("$results"/*.json)
+updates='[]'
+if [[ ${#files[@]} -gt 0 ]]; then
+  updates=$(jq -s -c '
+    map(select(. != null))
+    | group_by([.identifier, .version])
+    | map({
+        identifier: .[0].identifier,
+        version: .[0].version,
+        urls: (map(.urls[]) | unique),
+        rootInstallerProperties: (map(.rootInstallerProperties[]) | unique)
+      })
+  ' "${files[@]}")
+fi
+{
+  echo "updates=$updates"
+  echo "failed=$failed"
+} >> "$GITHUB_OUTPUT"

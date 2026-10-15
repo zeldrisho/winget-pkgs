@@ -14,29 +14,28 @@ concurrency:
 
 jobs:
   generate-matrix:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             .github/scripts/
-            manifests/*/*/*/autoupdate.yaml
-            manifests/*/*/*/*/autoupdate.yaml
-            manifests/*/*/*/*/*/autoupdate.yaml
+            manifests/**/autoupdate.yaml
 
-      - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@2026.07.29.1
-
-      - name: Install yq (mikefarah/yq via Homebrew — apt's "yq" is incompatible)
-        run: brew install yq
+      - name: Read autoupdate configs
+        id: configs
+        uses: mikefarah/yq@504fc38780cc46be8444ea1b72fb55919fc0bfb0 # v4.54.1
+        with:
+          cmd: yq -o=json -I=0 --from-file .github/scripts/autoupdate-checks.yq $(find manifests -name autoupdate.yaml | sort)
 
       - id: set
-        run: .github/scripts/generate-update-matrix.sh
+        env:
+          CHECKS_JSON: ${{ steps.configs.outputs.result }}
+        run: printf '%s\n' "$CHECKS_JSON" | .github/scripts/generate-update-matrix.sh
 
   update:
     name: Update (${{ matrix.batch.name }})
@@ -48,7 +47,7 @@ jobs:
         batch: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           sparse-checkout: .github/scripts
@@ -66,13 +65,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: .github/scripts/resolve-package-updates.sh
 
-      - name: Set up Homebrew
+      - name: Install Komac
         if: steps.updates.outputs.updates != '[]'
-        uses: Homebrew/actions/setup-homebrew@2026.07.29.1
-
-      - name: Install Komac (Homebrew)
-        if: steps.updates.outputs.updates != '[]'
-        run: brew install komac
+        uses: UnownPlain/install-komac@79a89eaaac36f74ca8b84ff8107849decde97f3c # 1.4
 
       - name: Submit updates
         if: steps.updates.outputs.updates != '[]'
@@ -83,17 +78,22 @@ jobs:
           UPDATES_JSON: ${{ steps.updates.outputs.updates }}
         run: .github/scripts/submit-package-updates.sh
 
+      # Packages whose check failed were skipped above; fail the job now that
+      # the others have been submitted.
+      - name: Fail on unresolved checks
+        if: ${{ !cancelled() && steps.updates.outputs.failed == '1' }}
+        run: |
+          echo '::error::One or more update checks failed; see the "Resolve latest versions and URLs" step.'
+          exit 1
+
   cleanup:
     name: Cleanup merged branches
     needs: update
     if: always() && !cancelled() && needs.update.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@2026.07.29.1
-
-      - name: Install Komac (Homebrew)
-        run: brew install komac
+      - name: Install Komac
+        uses: UnownPlain/install-komac@79a89eaaac36f74ca8b84ff8107849decde97f3c # 1.4
 
       - name: Cleanup merged branches
         env:

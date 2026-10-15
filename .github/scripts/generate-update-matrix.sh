@@ -1,23 +1,9 @@
 #!/usr/bin/env bash
+# Reads one JSON object per autoupdate check on stdin (produced by
+# autoupdate-checks.yq) and writes the batched job matrix to $GITHUB_OUTPUT.
 set -euo pipefail
 
-if [[ ! -d manifests ]]; then
-  echo 'matrix=[]' >> "$GITHUB_OUTPUT"
-  exit 0
-fi
-
-matrix=$(find manifests -name autoupdate.yaml -print | sort | while read -r file; do
-  directory=$(dirname "$file")
-  relative=${directory#manifests/*/}
-  identifier=${relative//\//.}
-  yq -o=json '.' "$file" | jq -c --arg identifier "$identifier" '
-    if has("checks") then
-      .checks[] + {identifier: $identifier}
-    else
-      . + {identifier: $identifier}
-    end
-  '
-done | jq -s -c '
+matrix=$(jq -s -c '
   group_by(.identifier)
   | [range(0; length; 3) as $start
       | .[$start:$start + 3] as $packageGroups

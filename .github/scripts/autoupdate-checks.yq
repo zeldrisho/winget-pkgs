@@ -1,0 +1,1 @@
+filename as $file | ((select(has("checks")) | .checks[]), select(has("checks") | not)) | . + {"identifier": ($file | sub("^manifests/[^/]+/"; "") | sub("/autoupdate[.]yaml$"; "") | split("/") | join("."))}

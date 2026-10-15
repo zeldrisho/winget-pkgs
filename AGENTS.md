@@ -1,41 +1,58 @@
 # Agent Instructions
 
-## Scope
-- This is a shallow, sparse fork of the WinGet manifest repository.
-- Treat both the repository and its Git history as exceptionally large.
-- Do not expand it to a full clone or recursively scan `manifests/`.
-- Keep history queries path-scoped and explicitly bounded; never enumerate the full commit list.
-- Avoid local full-tree clones, worktrees, merges, and exhaustive validation; prefer targeted checks and CI.
-- Stop once targeted evidence identifies the issue; do not perform costly reproduction without approval.
-- Do not create version manifests unless explicitly asked; updates are submitted by Komac CI.
+## Toolchain
 
-## Autoupdate Packages
-- Convert an identifier to `manifests/<lowercase-first-letter>/<identifier-with-dots-as-slashes>/`.
-- Inspect paths with `git ls-tree`; materialize only the latest stable `*.installer.yaml` and package-level `autoupdate.yaml` using non-cone sparse checkout.
-- Do not materialize version or locale manifests; inspect multiple installer manifests only when explicitly requested.
-- Treat supplied examples only as checkver references.
-- Read the complete latest stable `*.installer.yaml` as the source of truth for version format, installer URLs, architectures, types, and installer count.
-- Verify the check URL, regex, resolved version, and every generated installer URL locally.
-- Configure `checkUrl`, `versionRegex`, and list-valued `urlTemplates` in `autoupdate.yaml`.
-- Use `{VERSION}` for the submitted package version and `{MATCH}` for the raw regex result.
-- Use `versionTemplate` when WinGet's version differs from the raw check result; derive variable components instead of hardcoding them.
-- Use `versionTemplateValues` for regex-derived version placeholders.
-- Use `urlTemplateValues` for additional regex-derived URL placeholders.
-- Use `guards` with independent source/match regexes when historical matches can outlive the latest release.
-- Use `versionSource: msi` when the version comes from the MSI `ProductVersion`.
-- Keep publisher-replaced installer URLs unchanged; do not copy hashes into the config.
-- Use `rootInstallerProperties` when WinGet requires first-installer values to retain root-level inheritance.
+- CI actions: `actions/checkout`, `mikefarah/yq` (runs `yq` in Docker, not on PATH), `UnownPlain/install-komac`.
+- `msitools` via APT, only for `versionSource: msi` checks.
+- Local `yq` must be mikefarah v4; apt's `yq` is incompatible.
+- `secrets.KOMAC_TOKEN` is a classic token with `public_repo` scope.
+- Local Komac needs `--token "$(gh auth token)"`; headless Linux has no Secret Service.
 
-## CI and Tools
-- `.github/workflows/syncManifests.yml` re-syncs upstream manifests daily (02:00 UTC) and on manual dispatch — only for packages that have an `autoupdate.yaml`, never the `autoupdate.yaml` files themselves; `.github/workflows/updatePackages.yml` runs daily at 03:00 UTC and on manual dispatch.
+## Commands
+
+| Task                 | Command                                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lint workflows       | `actionlint .github/workflows/syncManifests.yml .github/workflows/updatePackages.yml`                                                                                |
+| Lint scripts         | `shellcheck .github/scripts/*.sh`                                                                                                                                    |
+| Build update matrix  | `yq -o=json -I=0 --from-file .github/scripts/autoupdate-checks.yq $(git ls-files ':(glob)manifests/**/autoupdate.yaml') \| GITHUB_OUTPUT=/dev/stdout .github/scripts/generate-update-matrix.sh` |
+| Resolve one package  | `PACKAGES_JSON='[<check + identifier>]' GH_TOKEN="$(gh auth token)" GITHUB_OUTPUT=/dev/stdout .github/scripts/resolve-package-updates.sh`                              |
+| Dry-run a submission | `komac update <Identifier> --version <v> --urls <url>... --dry-run --token "$(gh auth token)"`                                                                       |
+
+## Key Conventions
+
+- Do not create version manifests unless asked; Komac CI submits them.
+- Never recursively scan `manifests/` or enumerate full history; bound history queries by path and count.
+- Do not expand the shallow, sparse clone; prefer targeted checks and CI over worktrees, merges, or full validation.
+- Stop once targeted evidence identifies the issue; ask before costly reproduction.
 - Keep updater logic in `.github/scripts/`; preserve identifier grouping, three-package batches, and concurrent checks.
-- CI uses `Homebrew/actions/setup-homebrew` and Brew-installed `komac` and mikefarah `yq`.
-- CI installs `msitools` with APT only for MSI version checks.
-- Locally use `actionlint` for workflows, `yq` for matrix generation, APT-installed `msitools` for MSI checks, and Komac `analyze`/`update --dry-run` for generated-manifest checks.
-- Pass `--token "$(gh auth token)"` to local Komac commands because headless Linux lacks Secret Service storage.
-- Komac submission and cleanup use `secrets.KOMAC_TOKEN`, a classic token with `public_repo` scope.
-- Fix generated Komac PRs by amending their existing commit and pushing with `--force-with-lease`; do not add follow-up commits.
+- A failed check must not block its batch: `resolve-package-updates.sh` sets `failed=1` and the workflow fails after submitting the rest.
+- Pin every action to a commit hash with a version comment; no Homebrew in CI.
+- `autoupdate.yaml` is fork-only; `syncManifests.yml` syncs upstream manifests only for packages that have one and never restores the file.
+- Fix generated Komac PRs by amending their commit and pushing with `--force-with-lease`; no follow-up commits.
+- `autoupdate.yaml` path: `manifests/<lowercase-first-letter>/<Identifier with dots as slashes>/autoupdate.yaml`.
+- Inspect with `git ls-tree`; non-cone sparse-checkout only the latest stable `*.installer.yaml` and `autoupdate.yaml`.
+- The latest stable installer manifest is the source of truth for version format, URLs, architectures, types, and installer count.
+- Treat user-supplied examples only as checkver references.
+- Verify the check URL, regex, resolved version, and every generated installer URL locally.
+- Regexes run through `grep -oP`: first match wins; print only the value with `\K` or lookahead.
+- Headers and the final URL are searched first; the body is fetched only if nothing matches or `urlTemplateValues` is set.
+- Keep publisher-replaced installer URLs unchanged; never put hashes in the config.
 
-## References
-- Komac: `https://github.com/russellbanks/Komac`
-- Homebrew setup: `https://github.com/Homebrew/actions/tree/HEAD/setup-homebrew`
+| Key                                  | Use                                                                                    |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| `checkUrl`, `versionRegex`           | Where to look and how to match                                                         |
+| `urlTemplates`                       | List; `{VERSION}` is the submitted version, `{MATCH}` the raw regex result             |
+| `versionTemplate`, `versionTemplateValues` | WinGet version differs from the match; placeholder to regex, run on the match    |
+| `urlTemplateValues`                  | Placeholder to regex, run on the source, for extra URL parts                           |
+| `guards`                             | `name`, `sourceRegex`, `matchRegex` must agree after case and punctuation are dropped  |
+| `versionSource: msi`                 | Version from MSI `ProductVersion`; regex runs on `msiinfo export <file> Property`      |
+| `rootInstallerProperties`            | First-installer properties promoted to manifest root after submission                  |
+| `checks:`                            | Independent version streams; see `manifests/u/UniKey/UniKey/autoupdate.yaml`           |
+
+## External References
+
+| Need               | File                                    |
+| ------------------ | --------------------------------------- |
+| Manifest authoring | `doc/Authoring.md`                      |
+| Manifest schemas   | `schemas/JSON/`                         |
+| Komac CLI          | `https://github.com/russellbanks/Komac` |

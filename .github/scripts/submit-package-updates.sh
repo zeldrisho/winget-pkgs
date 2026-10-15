@@ -78,7 +78,8 @@ amend_root_installer_properties() {
   git -C "$repository_root" worktree remove --force "$worktree"
 }
 
-while read -r update; do
+# Read updates on fd 3 so komac, git, and gh cannot consume the loop's input.
+while read -r update <&3; do
   identifier=$(jq -r '.identifier' <<< "$update")
   version=$(jq -r '.version' <<< "$update")
   properties=$(jq -c '.rootInstallerProperties' <<< "$update")
@@ -105,4 +106,4 @@ while read -r update; do
   if jq -e 'length > 0' <<< "$properties" >/dev/null; then
     amend_root_installer_properties "$identifier" "$version" "$properties" "$komac_log"
   fi
-done < <(jq -c '.[]' <<< "$UPDATES_JSON")
+done 3< <(jq -c '.[]' <<< "$UPDATES_JSON")

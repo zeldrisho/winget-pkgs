@@ -16,7 +16,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           sparse-checkout: .github
@@ -38,8 +38,8 @@ jobs:
           changed_paths=$(mktemp)
           mapfile -d '' pkg_dirs < <(
             git ls-tree -r -z --name-only HEAD -- manifests \
-              | grep -z 'autoupdate.yaml$' \
-              | sed -z 's#/autoupdate.yaml$##'
+              | grep -z '/autoupdate\.yaml$' \
+              | sed -z 's#/autoupdate\.yaml$##'
           )
           if [[ ${#pkg_dirs[@]} -eq 0 ]]; then
             echo "No autoupdate.yaml files found; nothing to sync"
