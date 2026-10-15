@@ -3,5 +3,4 @@ checkUrl: https://clientsettingscdn.roblox.com/v1/client-version/WindowsPlayer
 versionRegex: '"version":"\K\d+\.\d+'
 urlTemplateValues:
   UPLOAD: '"clientVersionUpload":"\K[^"]+'
-urlTemplates:
-  - https://setup.rbxcdn.com/{UPLOAD}-RobloxPlayerInstaller.exe
+urlTemplates: https://setup.rbxcdn.com/{UPLOAD}-RobloxPlayerInstaller.exe

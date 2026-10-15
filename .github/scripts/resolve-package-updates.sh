@@ -30,7 +30,7 @@ resolve_package() {
   identifier=$(jq -r '.identifier' <<< "$package")
   root_installer_properties=$(jq -c '.rootInstallerProperties // []' <<< "$package")
   url_template_values=$(jq -c '.urlTemplateValues // {}' <<< "$package")
-  url_templates=$(jq -c '.urlTemplates' <<< "$package")
+  url_templates=$(jq -c '.urlTemplates | if type == "array" then . else [.] end' <<< "$package")
   version_regex=$(jq -r '.versionRegex' <<< "$package")
   version_source=$(jq -r '.versionSource // ""' <<< "$package")
   version_template=$(jq -r '.versionTemplate // ""' <<< "$package")

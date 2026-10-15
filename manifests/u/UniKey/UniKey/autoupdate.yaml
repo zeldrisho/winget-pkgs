@@ -32,5 +32,4 @@ checks:
       MAJOR: '^\K\d(?=\d+RC)'
       MINOR: '^\d\K\d+(?=RC)'
       BUILD: '-\K\d+$'
-    urlTemplates:
-      - https://www.unikey.org/assets/release/unikey{MATCH}-arm64.zip
+    urlTemplates: https://www.unikey.org/assets/release/unikey{MATCH}-arm64.zip

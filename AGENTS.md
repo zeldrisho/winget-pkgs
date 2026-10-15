@@ -41,7 +41,7 @@
 | Key                                  | Use                                                                                    |
 | ------------------------------------ | -------------------------------------------------------------------------------------- |
 | `checkUrl`, `versionRegex`           | Where to look and how to match                                                         |
-| `urlTemplates`                       | List; `{VERSION}` is the submitted version, `{MATCH}` the raw regex result             |
+| `urlTemplates`                       | One URL as a string, several as a list; `{VERSION}` is the submitted version, `{MATCH}` the raw regex result |
 | `versionTemplate`, `versionTemplateValues` | WinGet version differs from the match; placeholder to regex, run on the match    |
 | `urlTemplateValues`                  | Placeholder to regex, run on the source, for extra URL parts                           |
 | `guards`                             | `name`, `sourceRegex`, `matchRegex` must agree after case and punctuation are dropped  |

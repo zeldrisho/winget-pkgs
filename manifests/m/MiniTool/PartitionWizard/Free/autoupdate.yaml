@@ -4,5 +4,4 @@ guards:
     sourceRegex: '<h[1-6][^>]*>V\K[\d.]+'
     matchRegex: '^[\d.]+'
 versionRegex: '<h2>V\K[\d.]+'
-urlTemplates:
-  - https://cdn2.minitool.com/download-center/release/products/pw/current-release/pw-free-offline.exe
+urlTemplates: https://cdn2.minitool.com/download-center/release/products/pw/current-release/pw-free-offline.exe
