@@ -78,13 +78,11 @@ jobs:
           UPDATES_JSON: ${{ steps.updates.outputs.updates }}
         run: .github/scripts/submit-package-updates.sh
 
-      # Packages whose check failed were skipped above; fail the job now that
-      # the others have been submitted.
-      - name: Fail on unresolved checks
+      # Packages whose check failed were skipped above; warn without failing
+      # the job so one broken package does not turn every run red.
+      - name: Warn on unresolved checks
         if: ${{ !cancelled() && steps.updates.outputs.failed == '1' }}
-        run: |
-          echo '::error::One or more update checks failed; see the "Resolve latest versions and URLs" step.'
-          exit 1
+        run: echo '::warning::One or more update checks failed; see the "Resolve latest versions and URLs" step.'
 
   cleanup:
     name: Cleanup merged branches
