@@ -46,7 +46,9 @@ jobs:
             exit 0
           fi
 
-          git diff --name-only -z HEAD "upstream/$DEFAULT_BRANCH" -- \
+          # --no-renames lists both sides of a rename; without it the old path
+          # is hidden and stale files from a replaced version folder survive.
+          git diff --no-renames --name-only -z HEAD "upstream/$DEFAULT_BRANCH" -- \
             "${pkg_dirs[@]}" ':(exclude,glob)manifests/**/autoupdate.yaml' > "$changed_paths"
 
           if [[ -s "$changed_paths" ]]; then
