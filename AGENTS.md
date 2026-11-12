@@ -45,6 +45,7 @@
 | `guards`                                   | `name`, `sourceRegex`, `matchRegex` must agree after case and punctuation are dropped                 |
 | `versionSource: msi`                       | Version from MSI `ProductVersion`; regex runs on `msiinfo export <file> Property`                     |
 | `rootInstallerProperties`                  | First-installer properties promoted to manifest root after submission                                 |
+| `installerType`                            | Replaces Komac's `InstallerType` guess (`portable` for unrecognized exes) after submission            |
 | `checks:`                                  | Independent version streams; see `manifests/u/UniKey/UniKey/autoupdate.yaml`                          |
 
 ## References

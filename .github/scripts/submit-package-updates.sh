@@ -27,12 +27,17 @@ find_pr_number() {
   printf '%s\n' "$pr_number"
 }
 
-amend_root_installer_properties() {
+amend_installer_manifest() {
   local identifier=$1
   local version=$2
   local properties=$3
-  local komac_log=$4
+  local installer_type=$4
+  local komac_log=$5
   local pr_number head_owner head_ref
+  if [[ -n $installer_type && ! $installer_type =~ ^[a-z]+$ ]]; then
+    echo "Invalid installerType '$installer_type' for $identifier" >&2
+    return 1
+  fi
   pr_number=$(find_pr_number "$identifier" "$version" "$komac_log")
   head_owner=$(gh api "repos/microsoft/winget-pkgs/pulls/$pr_number" --jq '.head.repo.owner.login')
   head_ref=$(gh api "repos/microsoft/winget-pkgs/pulls/$pr_number" --jq '.head.ref')
@@ -56,6 +61,11 @@ amend_root_installer_properties() {
 
   python3 "$script_dir/promote-root-installer-properties.py" \
     "$worktree/$manifest_path" "$properties"
+  # Komac cannot recognize some bootstrapper exes and falls back to portable.
+  # The sed pattern leaves a trailing CR untouched.
+  if [[ -n $installer_type ]]; then
+    sed -i -E "s/^(InstallerType: )[A-Za-z]+/\\1$installer_type/" "$worktree/$manifest_path"
+  fi
   # Komac commits manifests with CRLF line endings (GitHub API bypasses the
   # .gitattributes normalization). The sparse worktree never materializes
   # .gitattributes, so a plain `git diff --check` would flag every promoted
@@ -83,6 +93,7 @@ while read -r update <&3; do
   identifier=$(jq -r '.identifier' <<< "$update")
   version=$(jq -r '.version' <<< "$update")
   properties=$(jq -c '.rootInstallerProperties' <<< "$update")
+  installer_type=$(jq -r '.installerType // ""' <<< "$update")
   readarray -t urls < <(jq -r '.urls[]' <<< "$update")
   komac_log=$(mktemp)
 
@@ -103,7 +114,7 @@ while read -r update <&3; do
     sleep 5
   done
 
-  if jq -e 'length > 0' <<< "$properties" >/dev/null; then
-    amend_root_installer_properties "$identifier" "$version" "$properties" "$komac_log"
+  if jq -e 'length > 0' <<< "$properties" >/dev/null || [[ -n $installer_type ]]; then
+    amend_installer_manifest "$identifier" "$version" "$properties" "$installer_type" "$komac_log"
   fi
 done 3< <(jq -c '.[]' <<< "$UPDATES_JSON")

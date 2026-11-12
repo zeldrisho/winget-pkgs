@@ -23,11 +23,12 @@ download_file() {
 resolve_package() {
   local package=$1
   local result=$2
-  local check_url guards identifier root_installer_properties url_template_values url_templates
+  local check_url guards identifier installer_type root_installer_properties url_template_values url_templates
   local version_regex version_source version_template version_template_values
   check_url=$(jq -r '.checkUrl' <<< "$package")
   guards=$(jq -c '.guards // []' <<< "$package")
   identifier=$(jq -r '.identifier' <<< "$package")
+  installer_type=$(jq -r '.installerType // ""' <<< "$package")
   root_installer_properties=$(jq -c '.rootInstallerProperties // []' <<< "$package")
   url_template_values=$(jq -c '.urlTemplateValues // {}' <<< "$package")
   url_templates=$(jq -c '.urlTemplates | if type == "array" then . else [.] end' <<< "$package")
@@ -119,9 +120,9 @@ resolve_package() {
       'map(split($placeholder) | join($value))' <<< "$urls_json")
   done < <(jq -r 'to_entries[] | @base64' <<< "$url_template_values")
 
-  jq -cn --arg identifier "$identifier" --arg version "$version" \
+  jq -cn --arg identifier "$identifier" --arg version "$version" --arg installerType "$installer_type" \
     --argjson rootInstallerProperties "$root_installer_properties" --argjson urls "$urls_json" \
-    '{identifier: $identifier, version: $version, urls: $urls, rootInstallerProperties: $rootInstallerProperties}' > "$result"
+    '{identifier: $identifier, version: $version, installerType: $installerType, urls: $urls, rootInstallerProperties: $rootInstallerProperties}' > "$result"
 }
 
 pids=()
@@ -155,6 +156,7 @@ if [[ ${#files[@]} -gt 0 ]]; then
     | map({
         identifier: .[0].identifier,
         version: .[0].version,
+        installerType: (map(.installerType) | map(select(. != "")) | first // ""),
         urls: (map(.urls[]) | unique),
         rootInstallerProperties: (map(.rootInstallerProperties[]) | unique)
       })
