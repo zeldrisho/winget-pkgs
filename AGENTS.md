@@ -34,7 +34,7 @@
 - Regexes run through `grep -oP`: first match wins; print only the value with `\K` or lookahead.
 - Headers and the final URL are searched first; the body is fetched only if nothing matches or `urlTemplateValues` is set.
 - Keep publisher-replaced installer URLs unchanged; never put hashes in the config.
-- Fix generated Komac PRs by amending their commit and pushing with `--force-with-lease`; no follow-up commits.
+- Fix generated Komac PRs with a follow-up commit; never force-push (the CI amend step is the only exception).
 
 | Key                                        | Use                                                                                                   |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
